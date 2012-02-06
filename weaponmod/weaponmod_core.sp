@@ -55,7 +55,9 @@ public Action:CmdAdminGiveWeapon(client, args) {
 	
 	GivePlayerItem(client, USING_WEAPON);
 	
-	new wpnid = 1;
+	new String:arg1[12];
+	GetCmdArg(1, arg1, sizeof(arg1));
+	new wpnid = StringToInt(arg1);
 	
 	g_cWeapon[client] = wpnid;
 	
