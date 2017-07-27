@@ -10,11 +10,7 @@
 
 #include <custom_weapon_mod.inc>
 
-#define ROLEPLAY
-
-#if defined ROLEPLAY
 #include <roleplay>
-#endif
 
 #pragma newdecls required
 
@@ -26,6 +22,7 @@ Handle g_hStack[MAX_CWEAPONS][WSH_Max];
 char g_sStack[MAX_CWEAPONS][WSS_Max][PLATFORM_MAX_PATH];
 int g_cBlood[MAX_BLOOD], g_cScorch, g_cBeam;
 DataPack g_hProjectile[MAX_ENTITIES];
+bool g_bRoleplayMOD;
 
 bool g_bHasCustomWeapon[65];
 StringMap g_hNamedIdentified;
@@ -41,26 +38,26 @@ StringMap g_hNamedIdentified;
 //
 public void OnPluginStart() {
 	char classname[64];
-
+	
 	for (int i = 1; i < MaxClients; i++)
-		if (IsClientInGame(i))
-			OnClientPostAdminCheck(i);
+	if (IsClientInGame(i))
+		OnClientPostAdminCheck(i);
 	
 	for (int i = 1; i < MAX_ENTITIES; i++) {
 		g_iEntityData[i][WSI_Identifier] = -1;
 		
-		if( !IsValidEdict(i) || !IsValidEntity(i) )
+		if (!IsValidEdict(i) || !IsValidEntity(i))
 			continue;
-		if( HasEntProp(i, Prop_Send, "m_iItemDefinitionIndex") ) {
+		if (HasEntProp(i, Prop_Send, "m_iItemDefinitionIndex")) {
 			CSGO_GetItemDefinitionNameByIndex(GetEntProp(i, Prop_Send, "m_iItemDefinitionIndex"), classname, sizeof(classname));
-			if( StrContains(classname, "default") >= 0 ) {
-				#if defined ROLEPLAY
-				int client = Weapon_GetOwner(i);
-				if( client > 0 ) {
-					rp_ClientMoney(client, i_AddToPay, 5000);
-					CPrintToChat(client, "{green}[CWM]{default} Votre arme BETA vous a été remboursée par un admin.");
+			if (StrContains(classname, "default") >= 0) {
+				if (g_bRoleplayMOD) {
+					int client = Weapon_GetOwner(i);
+					if (client > 0) {
+						rp_ClientMoney(client, i_AddToPay, 5000);
+						CPrintToChat(client, "{green}[CWM]{default} Votre arme BETA vous a été remboursée par un admin.");
+					}
 				}
-				#endif
 				AcceptEntityInput(i, "Kill");
 			}
 		}
@@ -95,6 +92,8 @@ public void OnMapStart() {
 	}
 }
 public APLRes AskPluginLoad2(Handle hPlugin, bool isAfterMapLoaded, char[] error, int err_max) {
+	g_bRoleplayMOD = LibraryExists("roleplay");
+	
 	CreateNative("CWM_Create", Native_CWM_Create);
 	CreateNative("CWM_SetInt", Native_CWM_SetInt);
 	CreateNative("CWM_SetFloat", Native_CWM_SetFloat);
@@ -112,6 +111,15 @@ public APLRes AskPluginLoad2(Handle hPlugin, bool isAfterMapLoaded, char[] error
 	CreateNative("CWM_GetId", Native_CWM_GetId);
 	CreateNative("CWM_RefreshHUD", Native_CWM_RefreshHUD);
 }
+public void OnLibraryAdded(const char[] name) {
+	if (StrEqual(name, "roleplay"))
+		g_bRoleplayMOD = true;
+}
+public void OnLibraryRemoved(const char[] name) {
+	if (StrEqual(name, "roleplay"))
+		g_bRoleplayMOD = false;
+}
+
 // -----------------------------------------------------------------------------------------------------------------
 //
 //	Admin commands
@@ -121,7 +129,7 @@ public Action Cmd_Spawn(int client, int args) {
 	float pos[3], ang[3];
 	GetCmdArg(1, tmp, sizeof(tmp));
 	
-	if ( args <= 0 ) {
+	if (args <= 0) {
 		
 		Menu menu = CreateMenu(menu_Spawn);
 		menu.SetTitle("Que voulez-vous spawn?");
@@ -133,9 +141,9 @@ public Action Cmd_Spawn(int client, int args) {
 	}
 	
 	int id;
-	if( g_hNamedIdentified.GetValue(tmp, id) ) {
+	if (g_hNamedIdentified.GetValue(tmp, id)) {
 		int target = GetCmdArgInt(2);
-		if( client > 0 )
+		if (client > 0)
 			GetClientAimedLocation(client, pos, ang);
 		ang[0] = ang[2] = 0.0;
 		ang[1] += 180.0;
@@ -162,9 +170,9 @@ public int Native_CWM_GetId(Handle plugin, int numParams) {
 	GetNativeString(1, tmp, sizeof(tmp));
 	
 	int id;
-	if( g_hNamedIdentified.GetValue(tmp, id) )
+	if (g_hNamedIdentified.GetValue(tmp, id))
 		return id;
-	return -1;	
+	return -1;
 }
 public int Native_CWM_Create(Handle plugin, int numParams) {
 	GetNativeString(1, g_sStack[g_iStackCount][WSS_Fullname], PLATFORM_MAX_PATH);
@@ -291,7 +299,7 @@ public int Native_CWM_ShootDamage(Handle plugin, int numParams) {
 			
 			if (IsBreakable(target)) {
 				Entity_Hurt(target, g_iStack[id][WSI_AttackDamage], client, DMG_CRUSH, g_sStack[id][WSS_Name]);
-				if( IsValidClient(target) )
+				if (g_bRoleplayMOD && IsValidClient(target) && rp_ClientCanAttack(client, target) )
 					rp_ClientAggroIncrement(client, target, g_iStack[id][WSI_AttackDamage]);
 				
 				if (IsValidClient(target)) {
@@ -333,17 +341,17 @@ public int Native_CWM_ShootExplode(Handle plugin, int numParams) {
 	
 	int MTRACE = 8;
 	
-	for(int i=1; i<=MAX_ENTITIES; i++) {
-		if( !IsValidEdict(i) || !IsValidEntity(i) )
+	for (int i = 1; i <= MAX_ENTITIES; i++) {
+		if (!IsValidEdict(i) || !IsValidEntity(i))
 			continue;
-		if( !IsBreakable(i) )
+		if (!IsBreakable(i))
 			continue;
-		if( IsValidClient(i) && !IsPlayerAlive(i) )
+		if (IsValidClient(i) && !IsPlayerAlive(i))
 			continue;
 		
 		Entity_GetAbsOrigin(i, dst);
 		distance = view_as<float>(Math_Min(1.0, GetVectorDistance(src, dst)));
-		if( distance > radius )
+		if (distance > radius)
 			continue;
 		
 		Entity_GetMinSize(i, min);
@@ -353,14 +361,14 @@ public int Native_CWM_ShootExplode(Handle plugin, int numParams) {
 		for (int j = 0; j < MTRACE; j++) {
 			
 			for (int k = 0; k <= 2; k++)
-				hit[k] = dst[k] + GetRandomFloat(min[k], max[k]);
+			hit[k] = dst[k] + GetRandomFloat(min[k], max[k]);
 			
 			
 			tr = TR_TraceRayFilterEx(src, hit, MASK_SHOT, RayType_EndPoint, TraceEntityFilterSelf, entity);
 			
-			if( TR_DidHit(tr) ) {
+			if (TR_DidHit(tr)) {
 				fraction += TR_GetFraction(tr);
-				if( TR_GetEntityIndex(tr) == i ) {
+				if (TR_GetEntityIndex(tr) == i) {
 					TE_SetupBloodSprite(hit, view_as<float>( { 0.0, 0.0, 0.0 } ), { 255, 0, 0, 255 }, 16, 0, 0);
 					TE_SendToAll();
 				}
@@ -373,11 +381,11 @@ public int Native_CWM_ShootExplode(Handle plugin, int numParams) {
 			delete tr;
 		}
 		
-		float damage = (fraction / float(MTRACE)) * (radius-distance) * falloff;
-		if( damage > 0.0 ) {
+		float damage = (fraction / float(MTRACE)) * (radius - distance) * falloff;
+		if (damage > 0.0) {
 			Entity_Hurt(i, RoundToCeil(damage), client, DMG_BLAST, g_sStack[id][WSS_Name]);
-			if( IsValidClient(i) )
-					rp_ClientAggroIncrement(client, i, RoundToCeil(damage));
+			if (g_bRoleplayMOD && IsValidClient(i) && rp_ClientCanAttack(client, i) )
+				rp_ClientAggroIncrement(client, i, RoundToCeil(damage));
 		}
 	}
 	
@@ -408,7 +416,7 @@ public int Native_CWM_ShootProjectile(Handle plugin, int numParams) {
 	Entity_SetCollisionGroup(ent, COLLISION_GROUP_PLAYER | COLLISION_GROUP_PLAYER_MOVEMENT);
 	
 	if (!StrEqual(model, NULL_MODEL)) {
-		if( !IsModelPrecached(model) )
+		if (!IsModelPrecached(model))
 			PrecacheModel(model);
 		SetEntityModel(ent, model);
 	}
@@ -429,11 +437,11 @@ public int Native_CWM_ShootProjectile(Handle plugin, int numParams) {
 	ScaleVector(vecDir, speed);
 	
 	
-	float delta[3] = {32.0, -16.0, -12.0};
+	float delta[3] =  { 32.0, -16.0, -12.0 };
 	Math_RotateVector(delta, vecAngles, delta);
 	vecOrigin[0] += delta[0];
 	vecOrigin[1] += delta[1];
-	vecOrigin[2] += delta[2];	
+	vecOrigin[2] += delta[2];
 	
 	if (g_hProjectile[ent])
 		delete g_hProjectile[ent];
@@ -441,7 +449,7 @@ public int Native_CWM_ShootProjectile(Handle plugin, int numParams) {
 	g_hProjectile[ent].WriteCell(client);
 	g_hProjectile[ent].WriteCell(entity);
 	g_hProjectile[ent].WriteCell(plugin);
-	g_hProjectile[ent].WriteFunction(callback);	
+	g_hProjectile[ent].WriteFunction(callback);
 	
 	TeleportEntity(ent, vecOrigin, vecAngles, vecDir);
 	SDKHook(ent, SDKHook_StartTouch, CWM_ProjectileTouch);
@@ -473,13 +481,13 @@ public Action OnPlayerRunCmd(int client, int & btn, int & impulse, float vel[3],
 			float time = GetGameTime();
 			int id = g_iEntityData[wpnid][WSI_Identifier];
 			
-			if( g_fEntityData[wpnid][WSF_NextAttack] <= time && (btn & IN_ATTACK) ) {
+			if (g_fEntityData[wpnid][WSF_NextAttack] <= time && (btn & IN_ATTACK)) {
 				switch (g_iStack[id][WSI_AttackType]) {
 					case WSA_Automatic: {
 						CWM_Attack(client, wpnid);
 					}
 					case WSA_LockAndLoad: {
-						if( g_iEntityData[wpnid][WSI_State] == 0 )
+						if (g_iEntityData[wpnid][WSI_State] == 0)
 							CWM_Attack(client, wpnid);
 						g_iEntityData[wpnid][WSI_State] = 1;
 					}
@@ -489,7 +497,7 @@ public Action OnPlayerRunCmd(int client, int & btn, int & impulse, float vel[3],
 					}
 				}
 			}
-			if( g_iEntityData[wpnid][WSI_State] == 1 && !(btn & IN_ATTACK) ) {
+			if (g_iEntityData[wpnid][WSI_State] == 1 && !(btn & IN_ATTACK)) {
 				switch (g_iStack[id][WSI_AttackType]) {
 					case WSA_LockAndLoad: {
 						CWM_AttackPost(client, wpnid);
@@ -497,7 +505,7 @@ public Action OnPlayerRunCmd(int client, int & btn, int & impulse, float vel[3],
 					}
 				}
 			}
-			if( g_fEntityData[wpnid][WSF_NextAttack] <= time && (btn & IN_ATTACK2) ) {
+			if (g_fEntityData[wpnid][WSF_NextAttack] <= time && (btn & IN_ATTACK2)) {
 				switch (g_iStack[id][WSI_AttackType]) {
 					case WSA_Automatic: {
 						CWM_Attack2(client, wpnid);
@@ -511,12 +519,12 @@ public Action OnPlayerRunCmd(int client, int & btn, int & impulse, float vel[3],
 					}
 				}
 			}
-			if( g_iEntityData[wpnid][WSI_State] == 0 && g_fEntityData[wpnid][WSF_NextAttack] <= time && (btn & IN_RELOAD) ) {
-				CWM_Reload(client, wpnid);				
+			if (g_iEntityData[wpnid][WSI_State] == 0 && g_fEntityData[wpnid][WSF_NextAttack] <= time && (btn & IN_RELOAD)) {
+				CWM_Reload(client, wpnid);
 			}
 			
 			lastButton[client] = btn;
-			if( g_iEntityData[wpnid][WSI_State] == 0 && g_fEntityData[wpnid][WSF_NextIdle] <= time )
+			if (g_iEntityData[wpnid][WSI_State] == 0 && g_fEntityData[wpnid][WSF_NextIdle] <= time)
 				CWM_Idle(client, wpnid);
 		}
 	}
@@ -534,20 +542,20 @@ stock void CWM_Refresh(int client, int wpnid) {
 		SetEntPropFloat(wpnid, Prop_Send, "m_flNextPrimaryAttack", FLT_MAX);
 	if (GetEntPropFloat(wpnid, Prop_Send, "m_flNextSecondaryAttack") != FLT_MAX)
 		SetEntPropFloat(wpnid, Prop_Send, "m_flNextSecondaryAttack", FLT_MAX);
-	if( GetEntProp(wpnid, Prop_Send, "m_iClip1") != g_iEntityData[wpnid][WSI_Bullet] )
+	if (GetEntProp(wpnid, Prop_Send, "m_iClip1") != g_iEntityData[wpnid][WSI_Bullet])
 		SetEntProp(wpnid, Prop_Send, "m_iClip1", g_iEntityData[wpnid][WSI_Bullet]);
-	if( GetEntProp(wpnid, Prop_Send, "m_iPrimaryReserveAmmoCount") != g_iEntityData[wpnid][WSI_Ammunition] )
+	if (GetEntProp(wpnid, Prop_Send, "m_iPrimaryReserveAmmoCount") != g_iEntityData[wpnid][WSI_Ammunition])
 		SetEntProp(wpnid, Prop_Send, "m_iPrimaryReserveAmmoCount", g_iEntityData[wpnid][WSI_Ammunition]);
 	
 	if (view > 0) {
-		if( GetEntProp(view, Prop_Send, "m_nSkin") != g_iEntityData[wpnid][WSI_Skin] )
+		if (GetEntProp(view, Prop_Send, "m_nSkin") != g_iEntityData[wpnid][WSI_Skin])
 			SetEntProp(view, Prop_Send, "m_nSkin", g_iEntityData[wpnid][WSI_Skin]);
 	}
 	if (world > 0) {
-		if( GetEntProp(world, Prop_Data, "m_nSkin") != g_iEntityData[wpnid][WSI_Skin] )
+		if (GetEntProp(world, Prop_Data, "m_nSkin") != g_iEntityData[wpnid][WSI_Skin])
 			SetEntProp(world, Prop_Data, "m_nSkin", g_iEntityData[wpnid][WSI_Skin]);
 	}
-	if( GetEntProp(wpnid, Prop_Send, "m_nSkin") != g_iEntityData[wpnid][WSI_Skin] )
+	if (GetEntProp(wpnid, Prop_Send, "m_nSkin") != g_iEntityData[wpnid][WSI_Skin])
 		SetEntProp(wpnid, Prop_Send, "m_nSkin", g_iEntityData[wpnid][WSI_Skin]);
 }
 stock void CWM_Animation(int client, int entity) {
@@ -568,7 +576,7 @@ stock void CWM_Reload(int client, int wpnid) {
 	
 	int bulletCount = g_iStack[id][WSI_ReloadType] == view_as<int>(WSR_Automatic) ? g_iStack[id][WSI_MaxBullet] : 1;
 	
-	if( (bulletCount+g_iEntityData[wpnid][WSI_Bullet]) > g_iStack[id][WSI_MaxBullet] )
+	if ((bulletCount + g_iEntityData[wpnid][WSI_Bullet]) > g_iStack[id][WSI_MaxBullet])
 		bulletCount = g_iStack[id][WSI_MaxBullet] - g_iEntityData[wpnid][WSI_Bullet];
 	
 	if (bulletCount > 0 && g_iEntityData[wpnid][WSI_Ammunition] > 0) {
@@ -586,7 +594,7 @@ stock void CWM_Reload(int client, int wpnid) {
 			g_iEntityData[wpnid][WSI_Ammunition] = 0;
 		}
 		
-		g_fEntityData[wpnid][WSF_NextAttack] = GetGameTime() + g_fStack[id][WSF_ReloadSpeed];		
+		g_fEntityData[wpnid][WSF_NextAttack] = GetGameTime() + g_fStack[id][WSF_ReloadSpeed];
 		CreateTimer(g_fStack[id][WSF_ReloadSpeed], CWM_ReloadBatch, wpnid);
 	}
 	else {
@@ -594,11 +602,11 @@ stock void CWM_Reload(int client, int wpnid) {
 	}
 }
 public Action CWM_ReloadBatch(Handle timer, any wpnid) {
-
+	
 	int client = g_iEntityData[wpnid][WSI_Owner];
 	int id = g_iEntityData[wpnid][WSI_Identifier];
 	
-	if( client > 0 && g_iEntityData[wpnid][WSI_Ammunition] > 1 && g_iEntityData[wpnid][WSI_Bullet] < g_iStack[id][WSI_MaxBullet] )
+	if (client > 0 && g_iEntityData[wpnid][WSI_Ammunition] > 1 && g_iEntityData[wpnid][WSI_Bullet] < g_iStack[id][WSI_MaxBullet])
 		CWM_Reload(client, wpnid);
 	
 	return Plugin_Handled;
@@ -641,17 +649,17 @@ stock void CWM_Attack(int client, int wpnid) {
 	int id = g_iEntityData[wpnid][WSI_Identifier];
 	float time = GetGameTime();
 	
-#if defined ROLEPLAY
-	if( rp_GetZoneBit(rp_GetPlayerZone(client)) & BITZONE_PEACEFULL ) {
-		g_fEntityData[wpnid][WSF_NextAttack] = time + g_fStack[id][WSF_AttackSpeed];
-		return;
+	if (g_bRoleplayMOD) {
+		if (rp_GetZoneBit(rp_GetPlayerZone(client)) & BITZONE_PEACEFULL) {
+			g_fEntityData[wpnid][WSF_NextAttack] = time + g_fStack[id][WSF_AttackSpeed];
+			return;
+		}
 	}
-#endif
-
-	if( GetForwardFunctionCount(view_as<Handle>(g_hStack[id][WSH_Attack])) == 0 )
+	
+	if (GetForwardFunctionCount(view_as<Handle>(g_hStack[id][WSH_Attack])) == 0)
 		return;
 	
-	if( (g_iEntityData[wpnid][WSI_Bullet] - g_iStack[id][WSI_AttackBullet]) >= 0) {
+	if ((g_iEntityData[wpnid][WSI_Bullet] - g_iStack[id][WSI_AttackBullet]) >= 0) {
 		
 		Action a;
 		Call_StartForward(view_as<Handle>(g_hStack[id][WSH_Attack]));
@@ -659,11 +667,12 @@ stock void CWM_Attack(int client, int wpnid) {
 		Call_PushCell(wpnid);
 		Call_Finish(a);
 		
-		if (a != Plugin_Stop ) {
+		if (a != Plugin_Stop) {
 			g_fEntityData[wpnid][WSF_NextAttack] = time + g_fStack[id][WSF_AttackSpeed];
-			g_iEntityData[wpnid][WSI_Bullet] -= g_iStack[id][WSI_AttackBullet];
-		
-			if( g_iEntityData[wpnid][WSI_Bullet] == 0 )
+			if (a != Plugin_Handled)
+				g_iEntityData[wpnid][WSI_Bullet] -= g_iStack[id][WSI_AttackBullet];
+			
+			if (g_iEntityData[wpnid][WSI_Bullet] == 0)
 				CreateTimer(g_fStack[id][WSF_AttackSpeed], CWM_ReloadBatch, wpnid);
 		}
 	}
@@ -679,21 +688,21 @@ stock void CWM_AttackPost(int client, int wpnid) {
 	Call_PushCell(client);
 	Call_PushCell(wpnid);
 	Call_Finish(a);
-
+	
 }
 stock void CWM_Attack2(int client, int wpnid) {
 	int id = g_iEntityData[wpnid][WSI_Identifier];
 	float time = GetGameTime();
 	
-#if defined ROLEPLAY
-	if( rp_GetZoneBit(rp_GetPlayerZone(client)) & BITZONE_PEACEFULL ) {
-		g_fEntityData[wpnid][WSF_NextAttack] = time + g_fStack[id][WSF_AttackSpeed];
-		return;
+	if (g_bRoleplayMOD) {
+		if (rp_GetZoneBit(rp_GetPlayerZone(client)) & BITZONE_PEACEFULL) {
+			g_fEntityData[wpnid][WSF_NextAttack] = time + g_fStack[id][WSF_AttackSpeed];
+			return;
+		}
 	}
-#endif
 	
 	
-	if( GetForwardFunctionCount(view_as<Handle>(g_hStack[id][WSH_Attack2])) == 0 )
+	if (GetForwardFunctionCount(view_as<Handle>(g_hStack[id][WSH_Attack2])) == 0)
 		return;
 	
 	if ((g_iEntityData[wpnid][WSI_Bullet] - g_iStack[id][WSI_AttackBullet]) >= 0) {
@@ -706,7 +715,8 @@ stock void CWM_Attack2(int client, int wpnid) {
 		
 		if (a != Plugin_Stop) {
 			g_fEntityData[wpnid][WSF_NextAttack] = time + g_fStack[id][WSF_AttackSpeed];
-			g_iEntityData[wpnid][WSI_Bullet] -= g_iStack[id][WSI_AttackBullet];
+			if (a != Plugin_Handled)
+				g_iEntityData[wpnid][WSI_Bullet] -= g_iStack[id][WSI_AttackBullet];
 		}
 	}
 	else {
@@ -729,7 +739,7 @@ public Action OnClientWeaponSwitch(int client, int wpnid) {
 	}
 }
 public Action OnClientWeaponDrop(int client, int wpnid) {
-	if( wpnid > 0 && g_iEntityData[wpnid][WSI_Identifier] >= 0) {
+	if (wpnid > 0 && g_iEntityData[wpnid][WSI_Identifier] >= 0) {
 		g_bHasCustomWeapon[client] = false;
 		g_iEntityData[wpnid][WSI_Owner] = 0;
 		RequestFrame(OnClientWeaponDropPost, EntIndexToEntRef(wpnid));
@@ -756,7 +766,7 @@ public Action CWM_ProjectileTouch(int ent, int target) {
 	int id = g_iEntityData[wpnid][WSI_Identifier];
 	
 	if (callback != INVALID_FUNCTION && target >= 0 && target != client) {
-	
+		
 		Action a;
 		Call_StartFunction(plugin, callback);
 		Call_PushCell(client);
@@ -767,11 +777,12 @@ public Action CWM_ProjectileTouch(int ent, int target) {
 		
 		if (a == Plugin_Continue && IsBreakable(target)) {
 			Entity_Hurt(target, g_iStack[id][WSI_AttackDamage], g_iEntityData[wpnid][WSI_Owner], DMG_GENERIC, g_sStack[id][WSS_Name]);
-			if( IsValidClient(target) )
-					rp_ClientAggroIncrement(g_iEntityData[wpnid][WSI_Owner], target, g_iStack[id][WSI_AttackDamage]);
+			
+			if (g_bRoleplayMOD && IsValidClient(target) && rp_ClientCanAttack(g_iEntityData[wpnid][WSI_Owner], target) )
+				rp_ClientAggroIncrement(g_iEntityData[wpnid][WSI_Owner], target, g_iStack[id][WSI_AttackDamage]);
 		}
 		
-		if( a != Plugin_Stop ) {
+		if (a != Plugin_Stop) {
 			AcceptEntityInput(ent, "KillHierarchy");
 			delete g_hProjectile[ent];
 		}
@@ -791,12 +802,12 @@ public bool IsBreakable(int ent) {
 		return IsPlayerAlive(ent);
 	if (!HasEntProp(ent, Prop_Send, "m_vecOrigin"))
 		return false;
-
-#if defined ROLEPLAY
-	if ( rp_GetBuildingData(ent, BD_owner) > 0 )
-		return true;
-#endif
-
+	
+	if (g_bRoleplayMOD) {
+		if (rp_GetBuildingData(ent, BD_owner) > 0)
+			return true;
+	}
+	
 	if (GetEntityMoveType(ent) != MOVETYPE_VPHYSICS)
 		return false;
 	if (!HasEntProp(ent, Prop_Send, "m_vecVelocity") && !HasEntProp(ent, Prop_Data, "m_vecAbsVelocity"))
