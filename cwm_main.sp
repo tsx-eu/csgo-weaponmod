@@ -110,6 +110,8 @@ public APLRes AskPluginLoad2(Handle hPlugin, bool isAfterMapLoaded, char[] error
 	CreateNative("CWM_ShootExplode", Native_CWM_ShootExplode);
 	CreateNative("CWM_GetId", Native_CWM_GetId);
 	CreateNative("CWM_RefreshHUD", Native_CWM_RefreshHUD);
+	
+	ServerCommand("sm_cwm_reload");
 }
 public void OnLibraryAdded(const char[] name) {
 	if (StrEqual(name, "roleplay"))
