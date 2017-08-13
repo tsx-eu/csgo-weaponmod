@@ -54,7 +54,7 @@ public void OnPluginStart() {
 				if (g_bRoleplayMOD) {
 					int client = Weapon_GetOwner(i);
 					if (client > 0) {
-						rp_ClientMoney(client, i_AddToPay, 5000);
+						rp_ClientMoney(client, i_AddToPay, 2500);
 						CPrintToChat(client, "{green}[CWM]{default} Votre arme BETA vous a été remboursée par un admin.");
 					}
 				}
@@ -489,9 +489,10 @@ public Action OnPlayerRunCmd(int client, int & btn, int & impulse, float vel[3],
 						CWM_Attack(client, wpnid);
 					}
 					case WSA_LockAndLoad: {
-						if (g_iEntityData[wpnid][WSI_State] == 0)
+						if (g_iEntityData[wpnid][WSI_State] == 0) {
+							g_iEntityData[wpnid][WSI_State] = 1;
 							CWM_Attack(client, wpnid);
-						g_iEntityData[wpnid][WSI_State] = 1;
+						}
 					}
 					case WSA_SemiAutomatic: {
 						if (!(lastButton[client] & IN_ATTACK))
@@ -654,12 +655,15 @@ stock void CWM_Attack(int client, int wpnid) {
 	if (g_bRoleplayMOD) {
 		if (rp_GetZoneBit(rp_GetPlayerZone(client)) & BITZONE_PEACEFULL) {
 			g_fEntityData[wpnid][WSF_NextAttack] = time + g_fStack[id][WSF_AttackSpeed];
+			g_iEntityData[wpnid][WSI_State] = 0;
 			return;
 		}
 	}
 	
-	if (GetForwardFunctionCount(view_as<Handle>(g_hStack[id][WSH_Attack])) == 0)
+	if (GetForwardFunctionCount(view_as<Handle>(g_hStack[id][WSH_Attack])) == 0) {
+		g_iEntityData[wpnid][WSI_State] = 0;
 		return;
+	}
 	
 	if ((g_iEntityData[wpnid][WSI_Bullet] - g_iStack[id][WSI_AttackBullet]) >= 0) {
 		
@@ -679,11 +683,21 @@ stock void CWM_Attack(int client, int wpnid) {
 		}
 	}
 	else {
+		g_iEntityData[wpnid][WSI_State] = 0;
 		CWM_Reload(client, wpnid);
 	}
 }
 stock void CWM_AttackPost(int client, int wpnid) {
 	int id = g_iEntityData[wpnid][WSI_Identifier];
+	float time = GetGameTime();
+	
+	if (g_bRoleplayMOD) {
+		if (rp_GetZoneBit(rp_GetPlayerZone(client)) & BITZONE_PEACEFULL) {
+			g_fEntityData[wpnid][WSF_NextAttack] = time + g_fStack[id][WSF_AttackSpeed];
+			g_iEntityData[wpnid][WSI_State] = 1;
+			return;
+		}
+	}
 	
 	Action a;
 	Call_StartForward(view_as<Handle>(g_hStack[id][WSH_AttackPost]));
