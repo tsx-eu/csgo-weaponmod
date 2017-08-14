@@ -471,7 +471,8 @@ public void OnClientPostAdminCheck(int client) {
 	SDKHook(client, SDKHook_WeaponDropPost, OnClientWeaponDrop);
 }
 public void OnEntityCreated(int entity, const char[] classname) {
-	g_iEntityData[entity][WSI_Identifier] = -1;
+	if( entity > 0 )
+		g_iEntityData[entity][WSI_Identifier] = -1;
 }
 public Action OnPlayerRunCmd(int client, int & btn, int & impulse, float vel[3], float ang[3], int & weapon, int & subtype, int & cmd, int & tick, int & seed, int mouse[2]) {
 	static int lastButton[65];
