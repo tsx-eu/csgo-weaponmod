@@ -71,7 +71,7 @@ public void OnPluginStart() {
 		RegAdminCmd("sm_cwm", Cmd_Spawn, ADMFLAG_ROOT);
 	}
 	
-	
+	RegServerCmd("rp_quest_reload", Cmd_PluginReloadSelf);
 	g_hNamedIdentified = new StringMap();
 }
 public void OnMapStart() {
