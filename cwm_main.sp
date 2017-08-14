@@ -292,14 +292,16 @@ public int Native_CWM_ShootDamage(Handle plugin, int numParams) {
 	
 	
 	int target;
-	Handle trace = TR_TraceRayFilterEx(src, ang, MASK_SOLID_BRUSHONLY, RayType_Infinite, TraceEntityFilterSelf, client);
+	Handle trace = TR_TraceRayFilterEx(src, ang, MASK_SHOT, RayType_Infinite, TraceEntityFilterSelf, client);
+
 	if (TR_DidHit(trace)) {
 		TR_GetEndPosition(hit, trace);
 		target = TR_GetEntityIndex(trace);
-		
+
 		if (GetVectorDistance(src, hit) < g_fStack[id][WSF_AttackRange]) {
-			
+
 			if (IsBreakable(target)) {
+				
 				Entity_Hurt(target, g_iStack[id][WSI_AttackDamage], client, DMG_CRUSH, g_sStack[id][WSS_Name]);
 				if (g_bRoleplayMOD && IsValidClient(target) && rp_ClientCanAttack(client, target) )
 					rp_ClientAggroIncrement(client, target, g_iStack[id][WSI_AttackDamage]);
@@ -824,8 +826,6 @@ public bool IsBreakable(int ent) {
 			return true;
 	}
 	
-	if (GetEntityMoveType(ent) != MOVETYPE_VPHYSICS)
-		return false;
 	if (!HasEntProp(ent, Prop_Send, "m_vecVelocity") && !HasEntProp(ent, Prop_Data, "m_vecAbsVelocity"))
 		return false;
 	if (Entity_GetMaxHealth(ent) <= 0)
@@ -839,6 +839,8 @@ public bool IsBreakable(int ent) {
 	if (StrContains(classname, "weapon_", false) == 0)
 		return true;
 	if (StrContains(classname, "chicken", false) == 0)
+		return true;
+	if (StrContains(classname, "monster_generic", false) == 0)
 		return true;
 	
 	return false;
