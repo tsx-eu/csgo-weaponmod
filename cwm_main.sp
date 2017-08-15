@@ -303,6 +303,9 @@ public int Native_CWM_ShootDamage(Handle plugin, int numParams) {
 			if (IsBreakable(target)) {
 				
 				Entity_Hurt(target, g_iStack[id][WSI_AttackDamage], client, DMG_CRUSH, g_sStack[id][WSS_Name]);
+				if( IsMonster(target) )
+					Entity_Hurt(target, g_iStack[id][WSI_AttackDamage], client, DMG_CRUSH, g_sStack[id][WSS_Name]);
+				
 				if (g_bRoleplayMOD && IsValidClient(target) && rp_ClientCanAttack(client, target) )
 					rp_ClientAggroIncrement(client, target, g_iStack[id][WSI_AttackDamage]);
 				
@@ -388,6 +391,9 @@ public int Native_CWM_ShootExplode(Handle plugin, int numParams) {
 		float damage = (fraction / float(MTRACE)) * (radius - distance) * falloff;
 		if (damage > 0.0) {
 			Entity_Hurt(i, RoundToCeil(damage), client, DMG_BLAST, g_sStack[id][WSS_Name]);
+			if( IsMonster(i) )
+				Entity_Hurt(i, RoundToCeil(damage), client, DMG_BLAST, g_sStack[id][WSS_Name]);
+			
 			if (g_bRoleplayMOD && IsValidClient(i) && rp_ClientCanAttack(client, i) )
 				rp_ClientAggroIncrement(client, i, RoundToCeil(damage));
 		}
@@ -796,6 +802,8 @@ public Action CWM_ProjectileTouch(int ent, int target) {
 		
 		if (a == Plugin_Continue && IsBreakable(target)) {
 			Entity_Hurt(target, g_iStack[id][WSI_AttackDamage], g_iEntityData[wpnid][WSI_Owner], DMG_GENERIC, g_sStack[id][WSS_Name]);
+			if( IsMonster(target) )
+				Entity_Hurt(target, g_iStack[id][WSI_AttackDamage], g_iEntityData[wpnid][WSI_Owner], DMG_GENERIC, g_sStack[id][WSS_Name]);
 			
 			if (g_bRoleplayMOD && IsValidClient(target) && rp_ClientCanAttack(g_iEntityData[wpnid][WSI_Owner], target) )
 				rp_ClientAggroIncrement(g_iEntityData[wpnid][WSI_Owner], target, g_iStack[id][WSI_AttackDamage]);
@@ -845,6 +853,13 @@ public bool IsBreakable(int ent) {
 		return true;
 	
 	return false;
+}
+bool IsMonster(int ent) {
+	static char classname[64];
+	if (ent <= 0 || !IsValidEdict(ent) || !IsValidEntity(ent))
+		return false;
+	
+	return StrEquals(classname, "monster_generic");
 }
 // -----------------------------------------------------------------------------------------------------------------
 //
