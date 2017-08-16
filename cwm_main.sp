@@ -95,21 +95,31 @@ public APLRes AskPluginLoad2(Handle hPlugin, bool isAfterMapLoaded, char[] error
 	g_bRoleplayMOD = LibraryExists("roleplay");
 	
 	CreateNative("CWM_Create", Native_CWM_Create);
+	
 	CreateNative("CWM_SetInt", Native_CWM_SetInt);
-	CreateNative("CWM_SetFloat", Native_CWM_SetFloat);
+	CreateNative("CWM_GetInt", Native_CWM_GetInt);
 	CreateNative("CWM_SetEntityInt", Native_CWM_SetEntityInt);
-	CreateNative("CWM_SetEntityFloat", Native_CWM_SetEntityFloat);
 	CreateNative("CWM_GetEntityInt", Native_CWM_GetEntityInt);
+	
+	CreateNative("CWM_SetFloat", Native_CWM_SetFloat);
+	CreateNative("CWM_GetFloat", Native_CWM_GetFloat);
+	CreateNative("CWM_SetEntityFloat", Native_CWM_SetEntityFloat);
 	CreateNative("CWM_GetEntityFloat", Native_CWM_GetEntityFloat);
+	
 	CreateNative("CWM_RegHook", Native_CWM_RegHook);
+	
 	CreateNative("CWM_AddAnimation", Native_CWM_AddAnimation);
 	CreateNative("CWM_RunAnimation", Native_CWM_RunAnimation);
+	
 	CreateNative("CWM_Spawn", Native_CWM_Spawn);
+	
 	CreateNative("CWM_ShootProjectile", Native_CWM_ShootProjectile);
 	CreateNative("CWM_ShootDamage", Native_CWM_ShootDamage);
 	CreateNative("CWM_ShootExplode", Native_CWM_ShootExplode);
+	
 	CreateNative("CWM_GetId", Native_CWM_GetId);
 	CreateNative("CWM_RefreshHUD", Native_CWM_RefreshHUD);
+	CreateNative("CWM_IsCustom", Native_CWM_IsCustom);
 	
 	ServerCommand("sm_cwm_reload");
 }
@@ -238,6 +248,9 @@ public int Native_CWM_SetEntityInt(Handle plugin, int numParams) {
 public int Native_CWM_GetEntityInt(Handle plugin, int numParams) {
 	return g_iEntityData[GetNativeCell(1)][GetNativeCell(2)];
 }
+public int Native_CWM_GetInt(Handle plugin, int numParams) {
+	return g_iStack[GetNativeCell(1)][GetNativeCell(2)];
+}
 public int Native_CWM_SetFloat(Handle plugin, int numParams) {
 	g_fStack[GetNativeCell(1)][GetNativeCell(2)] = GetNativeCell(3);
 	return 1;
@@ -248,6 +261,9 @@ public int Native_CWM_SetEntityFloat(Handle plugin, int numParams) {
 }
 public int Native_CWM_GetEntityFloat(Handle plugin, int numParams) {
 	return view_as<int>(g_fEntityData[GetNativeCell(1)][GetNativeCell(2)]);
+}
+public int Native_CWM_GetFloat(Handle plugin, int numParams) {
+	return view_as<int>(g_fStack[GetNativeCell(1)][GetNativeCell(2)]);
 }
 public int Native_CWM_RegHook(Handle plugin, int numParams) {
 	AddToForward(g_hStack[GetNativeCell(1)][GetNativeCell(2)], plugin, GetNativeFunction(3));
@@ -271,6 +287,8 @@ public int Native_CWM_Spawn(Handle plugin, int numParams) {
 	g_iEntityData[entity][WSI_Identifier] = id;
 	g_iEntityData[entity][WSI_Bullet] = g_iStack[id][WSI_MaxBullet];
 	g_iEntityData[entity][WSI_Ammunition] = g_iStack[id][WSI_MaxAmmunition];
+	g_iEntityData[entity][WSI_MaxBullet] = g_iStack[id][WSI_MaxBullet];
+	g_iEntityData[entity][WSI_MaxAmmunition] = g_iStack[id][WSI_MaxAmmunition];
 	
 	if (IsValidClient(target))
 		Client_EquipWeapon(target, entity, true);
@@ -468,6 +486,10 @@ public int Native_CWM_ShootProjectile(Handle plugin, int numParams) {
 public int Native_CWM_RefreshHUD(Handle plugin, int numParams) {
 	CWM_Refresh(GetNativeCell(1), GetNativeCell(2));
 }
+public int Native_CWM_IsCustom(Handle plugin, int numParams) {
+	int entity = GetNativeCell(1);
+	return view_as<int>(g_iEntityData[entity][WSI_Identifier] >= 0);
+}
 // -----------------------------------------------------------------------------------------------------------------
 //
 //	EVENT
@@ -479,6 +501,10 @@ public void OnClientPostAdminCheck(int client) {
 public void OnEntityCreated(int entity, const char[] classname) {
 	if( entity > 0 )
 		g_iEntityData[entity][WSI_Identifier] = -1;
+}
+public void OnEntityDestroyed(int entity) {
+	if( entity > 0 && g_hProjectile[entity] )
+		delete g_hProjectile[entity];
 }
 public Action OnPlayerRunCmd(int client, int & btn, int & impulse, float vel[3], float ang[3], int & weapon, int & subtype, int & cmd, int & tick, int & seed, int mouse[2]) {
 	static int lastButton[65];
@@ -859,7 +885,7 @@ bool IsMonster(int ent) {
 	if (ent <= 0 || !IsValidEdict(ent) || !IsValidEntity(ent))
 		return false;
 	
-	return StrEquals(classname, "monster_generic");
+	return StrEqual(classname, "monster_generic");
 }
 // -----------------------------------------------------------------------------------------------------------------
 //
