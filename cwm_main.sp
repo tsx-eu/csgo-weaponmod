@@ -275,6 +275,25 @@ public int Native_CWM_Spawn(Handle plugin, int numParams) {
 	GetNativeArray(3, pos, sizeof(pos));
 	GetNativeArray(4, ang, sizeof(ang));
 	
+	int sClient[65], sCount;
+	for (int i = 1; i <= MaxClients; i++) {
+		if( !IsValidClient(i) )
+			continue;
+		sClient[sCount++] = i;
+	}
+	
+	int player = sClient[GetRandomInt(0, sCount - 1)];
+	int wepid1 = GivePlayerItem(player, g_sStack[id][WSS_ReplaceWeapon]);
+	int entity = GivePlayerItem(player, g_sStack[id][WSS_ReplaceWeapon]);
+	RemovePlayerItem(player, entity);
+	
+	SetEntityModel(entity, g_sStack[id][WSS_WModel]);
+	TeleportEntity(entity, pos, ang, NULL_VECTOR);
+	
+	RemovePlayerItem(player, wepid1);
+	RemoveEdict(wepid1);
+	
+	/*
 	int entity = CreateEntityByName(g_sStack[id][WSS_ReplaceWeapon]);
 	DispatchKeyValue(entity, "classname", g_sStack[id][WSS_ReplaceWeapon]);
 	DispatchKeyValue(entity, "CanBePickedUp", "1");
@@ -282,6 +301,7 @@ public int Native_CWM_Spawn(Handle plugin, int numParams) {
 	
 	SetEntityModel(entity, g_sStack[id][WSS_WModel]);
 	TeleportEntity(entity, pos, ang, NULL_VECTOR);
+	*/	
 	
 	g_fEntityData[entity][WSF_NextAttack] = 0.0;
 	g_iEntityData[entity][WSI_Identifier] = id;
