@@ -40,8 +40,8 @@ public void OnPluginStart() {
 	char classname[64];
 	
 	for (int i = 1; i < MaxClients; i++)
-	if (IsClientInGame(i))
-		OnClientPostAdminCheck(i);
+		if (IsClientInGame(i))
+			OnClientPostAdminCheck(i);
 	
 	for (int i = 1; i < MAX_ENTITIES; i++) {
 		g_iEntityData[i][WSI_Identifier] = -1;
@@ -440,6 +440,7 @@ public int Native_CWM_ShootExplode(Handle plugin, int numParams) {
 	
 	return 1;
 }
+
 public int Native_CWM_ShootProjectile(Handle plugin, int numParams) {
 	char name[32], model[PLATFORM_MAX_PATH];
 	int client = GetNativeCell(1);
@@ -458,10 +459,9 @@ public int Native_CWM_ShootProjectile(Handle plugin, int numParams) {
 	SetEntPropFloat(ent, Prop_Send, "m_flElasticity", 0.4);
 	SetEntityMoveType(ent, MOVETYPE_FLYGRAVITY);
 	
-	
 	Entity_SetSolidType(ent, SOLID_VPHYSICS);
-	Entity_SetSolidFlags(ent, FSOLID_NOT_SOLID | FSOLID_TRIGGER);
-	Entity_SetCollisionGroup(ent, COLLISION_GROUP_PLAYER | COLLISION_GROUP_PLAYER_MOVEMENT);
+	Entity_SetSolidFlags(ent, FSOLID_TRIGGER );
+	Entity_SetCollisionGroup(ent, COLLISION_GROUP_PLAYER | COLLISION_GROUP_PLAYER_MOVEMENT);	
 	
 	if (!StrEqual(model, NULL_MODEL)) {
 		if (!IsModelPrecached(model))
@@ -517,6 +517,7 @@ public int Native_CWM_IsCustom(Handle plugin, int numParams) {
 public void OnClientPostAdminCheck(int client) {
 	SDKHook(client, SDKHook_WeaponSwitchPost, OnClientWeaponSwitch);
 	SDKHook(client, SDKHook_WeaponDropPost, OnClientWeaponDrop);
+	SDKHook(client, SDKHook_ShouldCollide, OnClientCollide);
 }
 public void OnEntityCreated(int entity, const char[] classname) {
 	if( entity > 0 )
@@ -798,6 +799,14 @@ stock void CWM_Attack2(int client, int wpnid) {
 //
 //	Forwards
 //
+public bool OnClientCollide(int entity, int collisiongroup, int contentsmask, int originalResult) {
+	bool result = originalResult == 255 ? true : false;
+	
+	if( collisiongroup == 13 && contentsmask == 1107845259 && result )
+		return false;
+	
+	return result;
+}
 public Action OnClientWeaponSwitch(int client, int wpnid) {
 	int id = g_iEntityData[wpnid][WSI_Identifier];
 	if (id >= 0) {
