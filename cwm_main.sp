@@ -115,6 +115,7 @@ public APLRes AskPluginLoad2(Handle hPlugin, bool isAfterMapLoaded, char[] error
 	
 	CreateNative("CWM_ShootProjectile", Native_CWM_ShootProjectile);
 	CreateNative("CWM_ShootDamage", Native_CWM_ShootDamage);
+	CreateNative("CWM_ShootHull", Native_CWM_ShootHull);
 	CreateNative("CWM_ShootExplode", Native_CWM_ShootExplode);
 	
 	CreateNative("CWM_GetId", Native_CWM_GetId);
@@ -314,6 +315,68 @@ public int Native_CWM_Spawn(Handle plugin, int numParams) {
 		Client_EquipWeapon(target, entity, true);
 	if (Weapon_GetOwner(entity) > 0)
 		OnClientWeaponSwitch(Weapon_GetOwner(entity), entity);
+}
+
+public int Native_CWM_ShootHull(Handle plugin, int numParams) {
+	float src[3], ang[3], hit[3], dst[3], min[3], max[3];
+	int client = GetNativeCell(1);
+	int wpnid = GetNativeCell(2);
+	float size = GetNativeCell(3);
+	GetNativeArray(4, hit, sizeof(hit));
+	
+	int id = g_iEntityData[wpnid][WSI_Identifier];
+	
+	GetClientEyePosition(client, src);
+	GetClientEyeAngles(client, ang);
+	ang[0] += GetRandomFloat(-g_fStack[id][WSF_Spread], g_fStack[id][WSF_Spread]);
+	ang[1] += GetRandomFloat(-g_fStack[id][WSF_Spread], g_fStack[id][WSF_Spread]);
+	GetAngleVectors(ang, dst, NULL_VECTOR, NULL_VECTOR);
+	ScaleVector(dst, 10000.0);
+	AddVectors(src, dst, dst);
+	
+	for (int i = 0; i < 3; i++) {
+		min[i] = -size;
+		max[i] =  size;
+	}
+	
+	int target;
+	Handle trace = TR_TraceHullFilterEx(src, dst, min, max, MASK_SHOT, TraceEntityFilterSelf, client);
+
+	if (TR_DidHit(trace)) {
+		TR_GetEndPosition(hit, trace);
+		target = TR_GetEntityIndex(trace);
+
+		if (GetVectorDistance(src, hit) < g_fStack[id][WSF_AttackRange]) {
+
+			if (IsBreakable(target)) {
+				
+				Entity_Hurt(target, g_iStack[id][WSI_AttackDamage], client, DMG_CRUSH, g_sStack[id][WSS_Name]);
+				if( IsMonster(target) )
+					Entity_Hurt(target, g_iStack[id][WSI_AttackDamage], client, DMG_CRUSH, g_sStack[id][WSS_Name]);
+				
+				if (g_bRoleplayMOD && IsValidClient(target) && rp_ClientCanAttack(client, target) )
+					rp_ClientAggroIncrement(client, target, g_iStack[id][WSI_AttackDamage]);
+				
+				if (IsValidClient(target)) {
+					TE_SetupBloodSprite(hit, view_as<float>( { 0.0, 0.0, 0.0 } ), { 255, 0, 0, 255 }, 16, 0, 0);
+					TE_SendToAll();
+					
+					Entity_GetGroundOrigin(target, dst);
+					TE_SetupWorldDecal(dst, g_cBlood[GetRandomInt(0, MAX_BLOOD - 1)]);
+					TE_SendToAll();
+				}
+			}
+			else
+				target = 0;
+		}
+		else
+			target = -1;
+	}
+	
+	delete trace;
+	if (target >= 0)
+		SetNativeArray(4, hit, sizeof(hit));
+	return target;
 }
 public int Native_CWM_ShootDamage(Handle plugin, int numParams) {
 	float src[3], ang[3], hit[3], dst[3];
