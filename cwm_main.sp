@@ -6,11 +6,8 @@
 #include <smlib>
 #include <emitsoundany>
 #include <colors_csgo>
-#include <csgo_items>   // https://forums.alliedmods.net/showthread.php?t=243009
 
 #include <custom_weapon_mod.inc>
-
-#include <roleplay>
 
 #pragma newdecls required
 
@@ -22,56 +19,33 @@ Handle g_hStack[MAX_CWEAPONS][WSH_Max];
 char g_sStack[MAX_CWEAPONS][WSS_Max][PLATFORM_MAX_PATH];
 int g_cBlood[MAX_BLOOD], g_cScorch, g_cBeam;
 DataPack g_hProjectile[MAX_ENTITIES];
-bool g_bRoleplayMOD;
 
 bool g_bHasCustomWeapon[65];
 StringMap g_hNamedIdentified;
 
+#define CSGO_FIX_SPAWN	0
 #define ANIM_SEQ		0
 #define	ANIM_FRAME		1
 #define ANIM_FPS		2
 
 #define DEG2RAD(%1)		(%1*3.14159265/180.0)
+
+
 // -----------------------------------------------------------------------------------------------------------------
 //
 //	PLUGIN START
 //
 public void OnPluginStart() {
-	char classname[64];
 	
 	for (int i = 1; i < MaxClients; i++)
 		if (IsClientInGame(i))
 			OnClientPostAdminCheck(i);
 	
-	for (int i = 1; i < MAX_ENTITIES; i++) {
+	for (int i = 1; i < MAX_ENTITIES; i++)
 		g_iEntityData[i][WSI_Identifier] = -1;
-		
-		if (!IsValidEdict(i) || !IsValidEntity(i))
-			continue;
-		if (HasEntProp(i, Prop_Send, "m_iItemDefinitionIndex")) {
-			CSGO_GetItemDefinitionNameByIndex(GetEntProp(i, Prop_Send, "m_iItemDefinitionIndex"), classname, sizeof(classname));
-			if (StrContains(classname, "default") >= 0) {
-				if (g_bRoleplayMOD) {
-					int client = Weapon_GetOwner(i);
-					if (client > 0) {
-						rp_ClientMoney(client, i_AddToPay, 2500);
-						CPrintToChat(client, "{green}[CWM]{default} Votre arme BETA vous a été remboursée par un admin.");
-					}
-				}
-				AcceptEntityInput(i, "Kill");
-			}
-		}
-	}
 	
 	
-	if (GetConVarInt(FindConVar("hostport")) == 27025) {
-		RegConsoleCmd("sm_cwm", Cmd_Spawn);
-	}
-	else {
-		RegAdminCmd("sm_cwm", Cmd_Spawn, ADMFLAG_ROOT);
-	}
-	
-	RegServerCmd("rp_quest_reload", Cmd_PluginReloadSelf);
+	RegAdminCmd("sm_cwm", Cmd_Spawn, ADMFLAG_ROOT);
 	g_hNamedIdentified = new StringMap();
 }
 public void OnMapStart() {
@@ -92,7 +66,7 @@ public void OnMapStart() {
 	}
 }
 public APLRes AskPluginLoad2(Handle hPlugin, bool isAfterMapLoaded, char[] error, int err_max) {
-	g_bRoleplayMOD = LibraryExists("roleplay");
+	RegPluginLibrary("CustomWeaponMod");
 	
 	CreateNative("CWM_Create", Native_CWM_Create);
 	
@@ -116,6 +90,7 @@ public APLRes AskPluginLoad2(Handle hPlugin, bool isAfterMapLoaded, char[] error
 	CreateNative("CWM_ShootProjectile", Native_CWM_ShootProjectile);
 	CreateNative("CWM_ShootDamage", Native_CWM_ShootDamage);
 	CreateNative("CWM_ShootHull", Native_CWM_ShootHull);
+	CreateNative("CWM_ShootRay", Native_CWM_ShootRay);
 	CreateNative("CWM_ShootExplode", Native_CWM_ShootExplode);
 	
 	CreateNative("CWM_GetId", Native_CWM_GetId);
@@ -123,14 +98,6 @@ public APLRes AskPluginLoad2(Handle hPlugin, bool isAfterMapLoaded, char[] error
 	CreateNative("CWM_IsCustom", Native_CWM_IsCustom);
 	
 	ServerCommand("sm_cwm_reload");
-}
-public void OnLibraryAdded(const char[] name) {
-	if (StrEqual(name, "roleplay"))
-		g_bRoleplayMOD = true;
-}
-public void OnLibraryRemoved(const char[] name) {
-	if (StrEqual(name, "roleplay"))
-		g_bRoleplayMOD = false;
 }
 
 // -----------------------------------------------------------------------------------------------------------------
@@ -188,26 +155,33 @@ public int Native_CWM_GetId(Handle plugin, int numParams) {
 	return -1;
 }
 public int Native_CWM_Create(Handle plugin, int numParams) {
-	GetNativeString(1, g_sStack[g_iStackCount][WSS_Fullname], PLATFORM_MAX_PATH);
-	GetNativeString(2, g_sStack[g_iStackCount][WSS_Name], PLATFORM_MAX_PATH);
-	GetNativeString(3, g_sStack[g_iStackCount][WSS_ReplaceWeapon], PLATFORM_MAX_PATH);
-	GetNativeString(4, g_sStack[g_iStackCount][WSS_VModel], PLATFORM_MAX_PATH);
-	GetNativeString(5, g_sStack[g_iStackCount][WSS_WModel], PLATFORM_MAX_PATH);
+	static char tmp[PLATFORM_MAX_PATH];
+	GetNativeString(2, tmp, sizeof(tmp));
+	int id;
+	if( !g_hNamedIdentified.GetValue(tmp, id) )
+		id = g_iStackCount++;
+	else
+		PrintToServer("[CWM] Warning: same weapon already exist. Overriding.");
+		
+	GetNativeString(1, g_sStack[id][WSS_Fullname], PLATFORM_MAX_PATH);
+	GetNativeString(2, g_sStack[id][WSS_Name], PLATFORM_MAX_PATH);
+	GetNativeString(3, g_sStack[id][WSS_ReplaceWeapon], PLATFORM_MAX_PATH);
+	GetNativeString(4, g_sStack[id][WSS_VModel], PLATFORM_MAX_PATH);
+	GetNativeString(5, g_sStack[id][WSS_WModel], PLATFORM_MAX_PATH);
 	
-	g_iStack[g_iStackCount][WSI_VModel] = PrecacheModel(g_sStack[g_iStackCount][WSS_VModel]);
-	g_iStack[g_iStackCount][WSI_WModel] = PrecacheModel(g_sStack[g_iStackCount][WSS_WModel]);
+	g_iStack[id][WSI_VModel] = PrecacheModel(g_sStack[id][WSS_VModel]);
+	g_iStack[id][WSI_WModel] = PrecacheModel(g_sStack[id][WSS_WModel]);
 	
-	view_as<Handle>(g_hStack[g_iStackCount][WSH_Draw]) = CreateForward(ET_Hook, Param_Cell, Param_Cell);
-	view_as<Handle>(g_hStack[g_iStackCount][WSH_Attack]) = CreateForward(ET_Hook, Param_Cell, Param_Cell);
-	view_as<Handle>(g_hStack[g_iStackCount][WSH_AttackPost]) = CreateForward(ET_Hook, Param_Cell, Param_Cell);
-	view_as<Handle>(g_hStack[g_iStackCount][WSH_Attack2]) = CreateForward(ET_Hook, Param_Cell, Param_Cell);
-	view_as<Handle>(g_hStack[g_iStackCount][WSH_Reload]) = CreateForward(ET_Hook, Param_Cell, Param_Cell);
-	view_as<Handle>(g_hStack[g_iStackCount][WSH_Idle]) = CreateForward(ET_Hook, Param_Cell, Param_Cell);
-	view_as<Handle>(g_hStack[g_iStackCount][WSH_Empty]) = CreateForward(ET_Hook, Param_Cell, Param_Cell);
+	view_as<Handle>(g_hStack[id][WSH_Draw]) = CreateForward(ET_Hook, Param_Cell, Param_Cell);
+	view_as<Handle>(g_hStack[id][WSH_Attack]) = CreateForward(ET_Hook, Param_Cell, Param_Cell);
+	view_as<Handle>(g_hStack[id][WSH_AttackPost]) = CreateForward(ET_Hook, Param_Cell, Param_Cell);
+	view_as<Handle>(g_hStack[id][WSH_Attack2]) = CreateForward(ET_Hook, Param_Cell, Param_Cell);
+	view_as<Handle>(g_hStack[id][WSH_Reload]) = CreateForward(ET_Hook, Param_Cell, Param_Cell);
+	view_as<Handle>(g_hStack[id][WSH_Idle]) = CreateForward(ET_Hook, Param_Cell, Param_Cell);
+	view_as<Handle>(g_hStack[id][WSH_Empty]) = CreateForward(ET_Hook, Param_Cell, Param_Cell);	
 	
-	
-	g_hNamedIdentified.SetValue(g_sStack[g_iStackCount][WSS_Name], g_iStackCount);
-	return g_iStackCount++;
+	g_hNamedIdentified.SetValue(g_sStack[id][WSS_Name], id);
+	return id++;
 }
 public int Native_CWM_RunAnimation(Handle plugin, int numParams) {
 	int entity = GetNativeCell(1);
@@ -283,26 +257,22 @@ public int Native_CWM_Spawn(Handle plugin, int numParams) {
 		sClient[sCount++] = i;
 	}
 	
+#if CSGO_FIX_SPAWN == 1
 	int player = sClient[GetRandomInt(0, sCount - 1)];
 	int wepid1 = GivePlayerItem(player, g_sStack[id][WSS_ReplaceWeapon]);
 	int entity = GivePlayerItem(player, g_sStack[id][WSS_ReplaceWeapon]);
 	RemovePlayerItem(player, entity);
-	
-	SetEntityModel(entity, g_sStack[id][WSS_WModel]);
-	TeleportEntity(entity, pos, ang, NULL_VECTOR);
-	
 	RemovePlayerItem(player, wepid1);
 	RemoveEdict(wepid1);
-	
-	/*
+#else
 	int entity = CreateEntityByName(g_sStack[id][WSS_ReplaceWeapon]);
 	DispatchKeyValue(entity, "classname", g_sStack[id][WSS_ReplaceWeapon]);
 	DispatchKeyValue(entity, "CanBePickedUp", "1");
 	DispatchSpawn(entity);
+#endif
 	
 	SetEntityModel(entity, g_sStack[id][WSS_WModel]);
 	TeleportEntity(entity, pos, ang, NULL_VECTOR);
-	*/	
 	
 	g_fEntityData[entity][WSF_NextAttack] = 0.0;
 	g_iEntityData[entity][WSI_Identifier] = id;
@@ -310,6 +280,7 @@ public int Native_CWM_Spawn(Handle plugin, int numParams) {
 	g_iEntityData[entity][WSI_Ammunition] = g_iStack[id][WSI_MaxAmmunition];
 	g_iEntityData[entity][WSI_MaxBullet] = g_iStack[id][WSI_MaxBullet];
 	g_iEntityData[entity][WSI_MaxAmmunition] = g_iStack[id][WSI_MaxAmmunition];
+	g_iEntityData[entity][WSI_ShotFired] = 0;
 	
 	if (IsValidClient(target))
 		Client_EquipWeapon(target, entity, true);
@@ -351,11 +322,6 @@ public int Native_CWM_ShootHull(Handle plugin, int numParams) {
 			if (IsBreakable(target)) {
 				
 				Entity_Hurt(target, g_iStack[id][WSI_AttackDamage], client, DMG_CRUSH, g_sStack[id][WSS_Name]);
-				if( IsMonster(target) )
-					Entity_Hurt(target, g_iStack[id][WSI_AttackDamage], client, DMG_CRUSH, g_sStack[id][WSS_Name]);
-				
-				if (g_bRoleplayMOD && IsValidClient(target) && rp_ClientCanAttack(client, target) )
-					rp_ClientAggroIncrement(client, target, g_iStack[id][WSI_AttackDamage]);
 				
 				if (IsValidClient(target)) {
 					TE_SetupBloodSprite(hit, view_as<float>( { 0.0, 0.0, 0.0 } ), { 255, 0, 0, 255 }, 16, 0, 0);
@@ -376,6 +342,53 @@ public int Native_CWM_ShootHull(Handle plugin, int numParams) {
 	delete trace;
 	if (target >= 0)
 		SetNativeArray(4, hit, sizeof(hit));
+	return target;
+}
+public int Native_CWM_ShootRay(Handle plugin, int numParams) {
+	float src[3], ang[3], hit[3], dst[3];
+	int client = GetNativeCell(1);
+	int wpnid = GetNativeCell(2);
+	GetNativeArray(3, hit, sizeof(hit));
+	
+	int id = g_iEntityData[wpnid][WSI_Identifier];
+	
+	GetClientEyePosition(client, src);
+	GetClientEyeAngles(client, ang);
+	ang[0] += GetRandomFloat(-g_fStack[id][WSF_Spread], g_fStack[id][WSF_Spread]);
+	ang[1] += GetRandomFloat(-g_fStack[id][WSF_Spread], g_fStack[id][WSF_Spread]);
+	
+	int target;
+	Handle trace = TR_TraceRayFilterEx(src, ang, MASK_SHOT, RayType_Infinite, TraceEntityFilterSelf, client);
+
+	if (TR_DidHit(trace)) {
+		TR_GetEndPosition(hit, trace);
+		target = TR_GetEntityIndex(trace);
+
+		if (GetVectorDistance(src, hit) < g_fStack[id][WSF_AttackRange]) {
+
+			if (IsBreakable(target)) {
+				
+				Entity_Hurt(target, g_iStack[id][WSI_AttackDamage], client, DMG_CRUSH, g_sStack[id][WSS_Name]);
+				
+				if (IsValidClient(target)) {
+					TE_SetupBloodSprite(hit, view_as<float>( { 0.0, 0.0, 0.0 } ), { 255, 0, 0, 255 }, 16, 0, 0);
+					TE_SendToAll();
+					
+					Entity_GetGroundOrigin(target, dst);
+					TE_SetupWorldDecal(dst, g_cBlood[GetRandomInt(0, MAX_BLOOD - 1)]);
+					TE_SendToAll();
+				}
+			}
+			else
+				target = 0;
+		}
+		else
+			target = -1;
+	}
+	
+	delete trace;
+	if (target >= 0)
+		SetNativeArray(3, hit, sizeof(hit));
 	return target;
 }
 public int Native_CWM_ShootDamage(Handle plugin, int numParams) {
@@ -404,12 +417,7 @@ public int Native_CWM_ShootDamage(Handle plugin, int numParams) {
 			if (IsBreakable(target)) {
 				
 				Entity_Hurt(target, g_iStack[id][WSI_AttackDamage], client, DMG_CRUSH, g_sStack[id][WSS_Name]);
-				if( IsMonster(target) )
-					Entity_Hurt(target, g_iStack[id][WSI_AttackDamage], client, DMG_CRUSH, g_sStack[id][WSS_Name]);
-				
-				if (g_bRoleplayMOD && IsValidClient(target) && rp_ClientCanAttack(client, target) )
-					rp_ClientAggroIncrement(client, target, g_iStack[id][WSI_AttackDamage]);
-				
+
 				if (IsValidClient(target)) {
 					TE_SetupBloodSprite(hit, view_as<float>( { 0.0, 0.0, 0.0 } ), { 255, 0, 0, 255 }, 16, 0, 0);
 					TE_SendToAll();
@@ -492,11 +500,6 @@ public int Native_CWM_ShootExplode(Handle plugin, int numParams) {
 		float damage = (fraction / float(MTRACE)) * (radius - distance) * falloff;
 		if (damage > 0.0) {
 			Entity_Hurt(i, RoundToCeil(damage), client, DMG_BLAST, g_sStack[id][WSS_Name]);
-			if( IsMonster(i) )
-				Entity_Hurt(i, RoundToCeil(damage), client, DMG_BLAST, g_sStack[id][WSS_Name]);
-			
-			if (g_bRoleplayMOD && IsValidClient(i) && rp_ClientCanAttack(client, i) )
-				rp_ClientAggroIncrement(client, i, RoundToCeil(damage));
 		}
 	}
 	
@@ -771,14 +774,6 @@ stock void CWM_Attack(int client, int wpnid) {
 	int id = g_iEntityData[wpnid][WSI_Identifier];
 	float time = GetGameTime();
 	
-	if (g_bRoleplayMOD) {
-		if (rp_GetZoneBit(rp_GetPlayerZone(client)) & BITZONE_PEACEFULL) {
-			g_fEntityData[wpnid][WSF_NextAttack] = time + g_fStack[id][WSF_AttackSpeed];
-			g_iEntityData[wpnid][WSI_State] = 0;
-			return;
-		}
-	}
-	
 	if (GetForwardFunctionCount(view_as<Handle>(g_hStack[id][WSH_Attack])) == 0) {
 		g_iEntityData[wpnid][WSI_State] = 0;
 		return;
@@ -794,8 +789,10 @@ stock void CWM_Attack(int client, int wpnid) {
 		
 		if (a != Plugin_Stop) {
 			g_fEntityData[wpnid][WSF_NextAttack] = time + g_fStack[id][WSF_AttackSpeed];
-			if (a != Plugin_Handled)
+			if (a != Plugin_Handled) {
 				g_iEntityData[wpnid][WSI_Bullet] -= g_iStack[id][WSI_AttackBullet];
+				CWM_Recoil(client, wpnid);
+			}
 			
 			if (g_iEntityData[wpnid][WSI_Bullet] == 0)
 				CreateTimer(g_fStack[id][WSF_AttackSpeed], CWM_ReloadBatch, wpnid);
@@ -806,17 +803,26 @@ stock void CWM_Attack(int client, int wpnid) {
 		CWM_Reload(client, wpnid);
 	}
 }
+stock void CWM_Recoil(int client, int wpnid) {
+	static float vec[3];
+	int id = g_iEntityData[wpnid][WSI_Identifier];
+	if( g_fStack[id][WSF_Recoil] <= 0.0 )
+		return;
+	
+	g_iEntityData[wpnid][WSI_ShotFired]++;
+	CreateTimer(g_fStack[id][WSF_AttackSpeed] * float(g_iStack[id][WSI_ShotFired]), CWM_Attack_Recoil, wpnid);
+	vec[0] = -float(g_iEntityData[wpnid][WSI_ShotFired]) * g_fStack[id][WSF_Recoil];
+	vec[1] = vec[0];
+	
+	PrintToServer("wpnid: %d++", g_iEntityData[wpnid][WSI_ShotFired]);
+	SetEntPropVector(client, Prop_Send, "m_aimPunchAngleVel", vec);
+}
+public Action CWM_Attack_Recoil(Handle timer, any wpnid) {
+	g_iEntityData[wpnid][WSI_ShotFired]--;
+	PrintToServer("wpnid: %d--", g_iEntityData[wpnid][WSI_ShotFired]);
+}
 stock void CWM_AttackPost(int client, int wpnid) {
 	int id = g_iEntityData[wpnid][WSI_Identifier];
-	float time = GetGameTime();
-	
-	if (g_bRoleplayMOD) {
-		if (rp_GetZoneBit(rp_GetPlayerZone(client)) & BITZONE_PEACEFULL) {
-			g_fEntityData[wpnid][WSF_NextAttack] = time + g_fStack[id][WSF_AttackSpeed];
-			g_iEntityData[wpnid][WSI_State] = 1;
-			return;
-		}
-	}
 	
 	Action a;
 	Call_StartForward(view_as<Handle>(g_hStack[id][WSH_AttackPost]));
@@ -828,13 +834,6 @@ stock void CWM_AttackPost(int client, int wpnid) {
 stock void CWM_Attack2(int client, int wpnid) {
 	int id = g_iEntityData[wpnid][WSI_Identifier];
 	float time = GetGameTime();
-	
-	if (g_bRoleplayMOD) {
-		if (rp_GetZoneBit(rp_GetPlayerZone(client)) & BITZONE_PEACEFULL) {
-			g_fEntityData[wpnid][WSF_NextAttack] = time + g_fStack[id][WSF_AttackSpeed];
-			return;
-		}
-	}
 	
 	
 	if (GetForwardFunctionCount(view_as<Handle>(g_hStack[id][WSH_Attack2])) == 0)
@@ -850,8 +849,10 @@ stock void CWM_Attack2(int client, int wpnid) {
 		
 		if (a != Plugin_Stop) {
 			g_fEntityData[wpnid][WSF_NextAttack] = time + g_fStack[id][WSF_AttackSpeed];
-			if (a != Plugin_Handled)
+			if (a != Plugin_Handled) {
 				g_iEntityData[wpnid][WSI_Bullet] -= g_iStack[id][WSI_AttackBullet];
+				CWM_Recoil(client, wpnid);
+			}
 		}
 	}
 	else {
@@ -920,11 +921,6 @@ public Action CWM_ProjectileTouch(int ent, int target) {
 		
 		if (a == Plugin_Continue && IsBreakable(target)) {
 			Entity_Hurt(target, g_iStack[id][WSI_AttackDamage], g_iEntityData[wpnid][WSI_Owner], DMG_GENERIC, g_sStack[id][WSS_Name]);
-			if( IsMonster(target) )
-				Entity_Hurt(target, g_iStack[id][WSI_AttackDamage], g_iEntityData[wpnid][WSI_Owner], DMG_GENERIC, g_sStack[id][WSS_Name]);
-			
-			if (g_bRoleplayMOD && IsValidClient(target) && rp_ClientCanAttack(g_iEntityData[wpnid][WSI_Owner], target) )
-				rp_ClientAggroIncrement(g_iEntityData[wpnid][WSI_Owner], target, g_iStack[id][WSI_AttackDamage]);
 		}
 		
 		if (a != Plugin_Stop) {
@@ -948,11 +944,6 @@ public bool IsBreakable(int ent) {
 	if (!HasEntProp(ent, Prop_Send, "m_vecOrigin"))
 		return false;
 	
-	if (g_bRoleplayMOD) {
-		if (rp_GetBuildingData(ent, BD_owner) > 0)
-			return true;
-	}
-	
 	if (!HasEntProp(ent, Prop_Send, "m_vecVelocity") && !HasEntProp(ent, Prop_Data, "m_vecAbsVelocity"))
 		return false;
 	if (Entity_GetMaxHealth(ent) <= 0)
@@ -971,13 +962,6 @@ public bool IsBreakable(int ent) {
 		return true;
 	
 	return false;
-}
-bool IsMonster(int ent) {
-	static char classname[64];
-	if (ent <= 0 || !IsValidEdict(ent) || !IsValidEntity(ent))
-		return false;
-	
-	return StrEqual(classname, "monster_generic");
 }
 // -----------------------------------------------------------------------------------------------------------------
 //
@@ -1014,4 +998,4 @@ stock int Entity_GetGroundOrigin(int entity, float pos[3]) {
 	if (tr)
 		TR_GetEndPosition(pos, tr);
 	delete tr;
-} 
+}
