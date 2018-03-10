@@ -392,51 +392,26 @@ public int Native_CWM_ShootRay(Handle plugin, int numParams) {
 	return target;
 }
 public int Native_CWM_ShootDamage(Handle plugin, int numParams) {
-	float src[3], ang[3], hit[3], dst[3];
+	static float hit[3];
 	int client = GetNativeCell(1);
 	int wpnid = GetNativeCell(2);
-	GetNativeArray(3, hit, sizeof(hit));
+	int target = GetNativeCell(3);
+	GetNativeArray(4, hit, sizeof(hit));
 	
 	int id = g_iEntityData[wpnid][WSI_Identifier];
 	
-	GetClientEyePosition(client, src);
-	GetClientEyeAngles(client, ang);
-	ang[0] += GetRandomFloat(-g_fStack[id][WSF_Spread], g_fStack[id][WSF_Spread]);
-	ang[1] += GetRandomFloat(-g_fStack[id][WSF_Spread], g_fStack[id][WSF_Spread]);
-	
-	
-	int target;
-	Handle trace = TR_TraceRayFilterEx(src, ang, MASK_SHOT, RayType_Infinite, TraceEntityFilterSelf, client);
-
-	if (TR_DidHit(trace)) {
-		TR_GetEndPosition(hit, trace);
-		target = TR_GetEntityIndex(trace);
-
-		if (GetVectorDistance(src, hit) < g_fStack[id][WSF_AttackRange]) {
-
-			if (IsBreakable(target)) {
-				
-				Entity_Hurt(target, g_iStack[id][WSI_AttackDamage], client, DMG_CRUSH, g_sStack[id][WSS_Name]);
-
-				if (IsValidClient(target)) {
-					TE_SetupBloodSprite(hit, view_as<float>( { 0.0, 0.0, 0.0 } ), { 255, 0, 0, 255 }, 16, 0, 0);
-					TE_SendToAll();
+	if (IsBreakable(target)) {
+		Entity_Hurt(target, g_iStack[id][WSI_AttackDamage], client, DMG_CRUSH, g_sStack[id][WSS_Name]);
+		if (IsValidClient(target)) {
+			TE_SetupBloodSprite(hit, view_as<float>( { 0.0, 0.0, 0.0 } ), { 255, 0, 0, 255 }, 16, 0, 0);
+			TE_SendToAll();
 					
-					Entity_GetGroundOrigin(target, dst);
-					TE_SetupWorldDecal(dst, g_cBlood[GetRandomInt(0, MAX_BLOOD - 1)]);
-					TE_SendToAll();
-				}
-			}
-			else
-				target = 0;
+			Entity_GetGroundOrigin(target, hit);
+			TE_SetupWorldDecal(hit, g_cBlood[GetRandomInt(0, MAX_BLOOD - 1)]);
+			TE_SendToAll();
 		}
-		else
-			target = -1;
 	}
 	
-	delete trace;
-	if (target >= 0)
-		SetNativeArray(3, hit, sizeof(hit));
 	return target;
 }
 public int Native_CWM_ShootExplode(Handle plugin, int numParams) {
@@ -814,12 +789,10 @@ stock void CWM_Recoil(int client, int wpnid) {
 	vec[0] = -float(g_iEntityData[wpnid][WSI_ShotFired]) * g_fStack[id][WSF_Recoil];
 	vec[1] = vec[0];
 	
-	PrintToServer("wpnid: %d++", g_iEntityData[wpnid][WSI_ShotFired]);
 	SetEntPropVector(client, Prop_Send, "m_aimPunchAngleVel", vec);
 }
 public Action CWM_Attack_Recoil(Handle timer, any wpnid) {
 	g_iEntityData[wpnid][WSI_ShotFired]--;
-	PrintToServer("wpnid: %d--", g_iEntityData[wpnid][WSI_ShotFired]);
 }
 stock void CWM_AttackPost(int client, int wpnid) {
 	int id = g_iEntityData[wpnid][WSI_Identifier];
